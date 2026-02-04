@@ -35,27 +35,30 @@ export async function initServer() {
   app.use(cookieParser())
 
   const allowedOrigins = [
-  "http://localhost:5173",
-  "https://worksphere35.vercel.app",
-  "https://work-sphere-alpha.vercel.app",
-];
+    'http://localhost:5173',
+    'https://worksphere35.vercel.app',
+    'https://work-sphere-alpha.vercel.app',
+  ]
 
-const corsOptions = {
-  origin: function (origin, callback) {
-    // allow server-to-server or Postman
-    if (!origin) return callback(null, true);
+  const corsOptions = {
+    origin: function (origin, callback) {
+      // allow server-to-server or Postman
+      if (!origin) return callback(null, true)
 
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true)
+      }
 
-    callback(new Error("Not allowed by CORS: " + origin));
-  },
-  credentials: true,
-};
-
+      return callback(null, false) // don't throw, just deny
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  }
 
   app.use(cors(corsOptions))
+  app.options('*', cors(corsOptions)) // ✅ handle preflight for all routes
+
   // Route Handlers
   app.use(
     express.json({
