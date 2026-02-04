@@ -19,52 +19,73 @@ import paymentRouter from './routes/payment.routes.js'
 
 export async function initServer() {
   const app = express()
-  // MIDDLEWARES
+
+  // CORS Configuration - MUST BE EARLY
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'https://work-sphere-alpha.vercel.app',
+  ]
+
+  const corsOptions = {
+    origin(origin, callback) {
+      // Allow requests with no origin (like mobile apps, Postman, etc.)
+      if (!origin) return callback(null, true)
+      
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true)
+      }
+      
+      return callback(new Error('Not allowed by CORS'))
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Set-Cookie'], // Expose cookies to the client
+    maxAge: 86400, // Cache preflight for 24 hours
+  }
+
+  // Apply CORS BEFORE other middlewares
+  app.use(cors(corsOptions))
+  app.options('*', cors(corsOptions)) // Handle preflight globally
+
+  // Helmet with CORS-friendly configuration
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+    })
+  )
+
+  app.use(cookieParser())
+
+  // Logging
   if (process.env.NODE_ENV !== 'test') {
     app.use(
       morgan('common', {
         stream: {
           write: (message) => logger.info(message.trim()),
         },
-      }),
+      })
     )
   }
+
+  // Static files
   app.use('/uploads/profile-images/', express.static('uploads/profile-images'))
-  app.use(helmet()) // Apply secure headers to all routes
 
-  app.use(cookieParser())
-
-  const allowedOrigins = [
-    'http://localhost:5173',
-    'https://work-sphere-alpha.vercel.app',
-  ]
-
-const corsOptions = {
-  origin(origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error("Not allowed by CORS"));
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-};
-
-
-  app.use(cors(corsOptions))
-  app.options('*', cors(corsOptions)) // ✅ handle preflight for all routes
-
-  // Route Handlers
+  // Body parsing
   app.use(
     express.json({
-      limit: '10kb', // Restrict JSON payload to 10 KB
-    }),
+      limit: '10kb',
+    })
   )
 
-  app.use(mongoSanitize()) // Sanitize data to prevent NoSQL injection
+  app.use(mongoSanitize())
   app.use(compression())
 
+  // Health check
   app.get('/health', (req, res) => res.status(200).send('OK'))
+
+  // API Routes
   app.use('/api/v1/users', userRouter)
   app.use('/api/v1/ai', aiRouter)
   app.use('/api/v1/reviews', reviewRouter)
@@ -82,11 +103,13 @@ const corsOptions = {
 
   swaggerDocs(app, process.env.PORT)
 
+  // 404 handler
   app.all('*', (req, res, next) => {
     logger.error(`Can't find ${req.originalUrl}`)
     next(new AppError(`Can't find ${req.originalUrl}`, 404))
   })
 
+  // Error handler
   app.use(errorHandler)
 
   return app
